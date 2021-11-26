@@ -2,8 +2,6 @@
 # mavlink package is required
 from pymavlink import mavutil
 import fnmatch
-import copy
-from time import sleep
 from MAVProxy.modules.lib import multiproc
 
 def progress_bar(pct):
@@ -17,17 +15,24 @@ def showParams(params):
         if fnmatch.fnmatch(str(p).upper(), wildcard.upper()):
             print("%-16.16s %f" % (str(p), params[p]))
 
-
 if __name__ == '__main__':
     multiproc.freeze_support()
-    file = 'log_11_2021-10-27-14-17-30.bin'
+    file = '/home/troll/Projects/Z84/log_11_2021-10-27-14-17-30.bin'
 
     print(f'Loading {file} ...')
     mlog = mavutil.mavlink_connection(file, notimestamps=False,
                                       zero_time_base=False,
                                       progress_callback=progress_bar)
 
-    sleep(5)
-    msgs = copy.copy(mlog.messages)
-    params = copy.copy(mlog.params)
-    showParams(params)
+    mlog.flightmode_list()
+
+    param_servo_auto_trim = mlog.params['SERVO_AUTO_TRIM']
+    param_stall_prevention = mlog.params['STALL_PREVENTION']
+
+    print('\n All parameters:')
+    showParams(mlog.params)
+
+    print('\n Vehicle parameters:')
+    print(f'Servo auto trim: {param_servo_auto_trim}')
+    print(f'Stall prevention: {param_stall_prevention}')
+
