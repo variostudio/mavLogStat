@@ -1,6 +1,7 @@
 # This is a simple Mavlink Log analyzer tool
 # pymavlink package is required
 from pymavlink import mavutil
+from geopy import distance
 import fnmatch
 import argparse
 
@@ -28,7 +29,9 @@ def show_user_params(params):
 
 
 def show_flight_stat(log):
-    max_alt = 0
+    max_altitude = 0
+    max_distance = 0
+    total_distance = 0
     last_bat_msg = None
     last_gps_msg = None
     first_gps_msg = None
@@ -46,19 +49,29 @@ def show_flight_stat(log):
         if mtype == 'GPS':
             if first_gps_msg is None:
                 first_gps_msg = msg
+                last_gps_msg = msg
+
+            dist = distance.distance((last_gps_msg.Lat, last_gps_msg.Lng), (msg.Lat, msg.Lng))
+            home = distance.distance((first_gps_msg.Lat, first_gps_msg.Lng), (msg.Lat, msg.Lng))
+            total_distance += dist.m
             last_gps_msg = msg
+            if home.m > max_distance:
+                max_distance = home.m
 
         if mtype == 'BARO':
             alt = msg.Alt
-            if alt > max_alt:
-                max_alt = alt
+            if alt > max_altitude:
+                max_altitude = alt
 
     print('\nFlight statistics:')
     print('Total time: %.2f sec' % (last_bat_msg.TimeUS/1000000))
-    print('Maximum altitude: %.2f m' % max_alt)
+    print('Maximum altitude: %.2f m' % max_altitude)
     print('Used: %.2f mAh' % last_bat_msg.CurrTot)
     print(f'Home location: {first_gps_msg.Lat}, {first_gps_msg.Lng}')
     print(f'Last known location: {last_gps_msg.Lat}, {last_gps_msg.Lng}')
+    print('Total distance: %.2f km' % (total_distance/1000))
+    print('Maximum range: %.2f km' % (max_distance/1000))
+    print('Average efficiency: %.2f mAh/km' % (last_bat_msg.CurrTot * 1000 / total_distance))
 
 
 if __name__ == '__main__':
@@ -75,7 +88,7 @@ if __name__ == '__main__':
                                           progress_callback=progress_bar)
 
         mlog.flightmode_list()
-        print(f'\nLoaded {mlog._count} messages total')
+        print(f'\nLoading done.')
 
         show_user_params(mlog.params)
 
