@@ -136,7 +136,7 @@ def show_plot_data(log, filename):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(prog='mavLogStat')
+    parser = argparse.ArgumentParser(prog='mavLogPlot')
     parser.add_argument('logfile', help='log file to analyze')
     args = parser.parse_args()
 
