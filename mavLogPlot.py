@@ -17,6 +17,7 @@ def show_mission(wps, map_output):
         first_location = None
         current_location = None
         auto_land_set = False
+        first_marker_skipped = False
         max_range = 0
         total_length = 0
 
@@ -40,12 +41,15 @@ def show_mission(wps, map_output):
                     auto_land_set = True
 
                 wp_locations.append(current_location)
-                folium.Marker(
-                    location=[wp[0], wp[1]],
-                    popup="Waypoint #{0}".format(wp[2]),
-                    tooltip="Waypoint #{2}: [{0}, {1}], Alt={3} m, Type={4}".format(wp[0], wp[1], wp[2], wp[3], wp[4]),
-                    icon=folium.Icon(icon="plus", color="blue"),
-                ).add_to(map_output)
+                if first_marker_skipped:
+                    folium.Marker(
+                        location=[wp[0], wp[1]],
+                        popup="Waypoint #{0}".format(wp[2]),
+                        tooltip="Waypoint #{2}: [{0}, {1}], Alt={3} m, Type={4}".format(wp[0], wp[1], wp[2], wp[3], wp[4]),
+                        icon=folium.Icon(icon="plus", color="blue"),
+                    ).add_to(map_output)
+                else:
+                    first_marker_skipped = True
 
         folium.PolyLine(
             wp_locations, color='grey'
@@ -119,14 +123,14 @@ def show_plot_data(log, filename):
         location=[first_gps_msg.Lat, first_gps_msg.Lng],
         popup="Take off",
         tooltip="Take off: [{0}, {1}]".format(first_gps_msg.Lat, first_gps_msg.Lng),
-        icon=folium.Icon(icon="home", color="green"),
+        icon=folium.Icon(icon="chevron-up", color="green"),
     ).add_to(base_map)
 
     folium.Marker(
         location=[last_gps_msg.Lat, last_gps_msg.Lng],
         popup="Landing",
         tooltip="Landing: [{0}, {1}]".format(last_gps_msg.Lat, last_gps_msg.Lng),
-        icon=folium.Icon(icon="flag", color="pink"),
+        icon=folium.Icon(icon="chevron-down", color="darkgreen"),
     ).add_to(base_map)
 
     show_mission(wps, base_map)
