@@ -44,8 +44,8 @@ def show_mission(wps, map_output):
                 if first_marker_skipped:
                     folium.Marker(
                         location=[wp[0], wp[1]],
-                        popup="Waypoint #{0}".format(wp[2]),
-                        tooltip="Waypoint #{2}: [{0}, {1}], Alt={3} m, Type={4}".format(wp[0], wp[1], wp[2], wp[3], wp[4]),
+                        tooltip="Waypoint #{0}".format(wp[2]),
+                        popup="Waypoint #{2}: [{0}, {1}], Alt={3} m, Type={4}".format(wp[0], wp[1], wp[2], wp[3], wp[4]),
                         icon=folium.Icon(icon="plus", color="blue"),
                     ).add_to(map_output)
                 else:
@@ -63,18 +63,71 @@ def show_mission(wps, map_output):
         print('\nNo mission data is found')
 
 
-def show_plot_data(log, filename):
+def draw_map(filename, first_gps_msg, last_gps_msg, longest_distance_gps, points, wps, max_distance, messages):
+    base_map = folium.Map([first_gps_msg.Lat, first_gps_msg.Lng], zoom_start=10)
+    folium.PolyLine(
+        points, color='darkorange'
+    ).add_to(base_map)
+
+    folium.Marker(
+        location=[first_gps_msg.Lat, first_gps_msg.Lng],
+        popup="Take off: [{0}, {1}]".format(first_gps_msg.Lat, first_gps_msg.Lng),
+        tooltip="Take off",
+        icon=folium.Icon(icon="circle-arrow-up", color="green")
+    ).add_to(base_map)
+
+    folium.Marker(
+        location=[last_gps_msg.Lat, last_gps_msg.Lng],
+        popup="Landing: [{0}, {1}]".format(last_gps_msg.Lat, last_gps_msg.Lng),
+        tooltip="Landing",
+        icon=folium.Icon(icon="circle-arrow-down", color="darkgreen")
+    ).add_to(base_map)
+
+    folium.Marker(
+        location=[longest_distance_gps.Lat, longest_distance_gps.Lng],
+        popup="The most remote point: [{0}, {1}], {2:.2f} km".format(longest_distance_gps.Lat, longest_distance_gps.Lng, max_distance/1000),
+        tooltip="The most remote point",
+        icon=folium.Icon(icon="asterisk", color="blue")
+    ).add_to(base_map)
+
+
+    for message in messages:
+        if message[0].startswith('Failsafe'):
+            if "Long event on" in message[0]:
+                folium.Marker(
+                    location=[message[1], message[2]],
+                    popup=message[0],
+                    tooltip="Failsafe - long event",
+                    icon=folium.Icon(icon="exclamation-sign", color="red")
+                ).add_to(base_map)
+            if "Short event on" in message[0]:
+                folium.Marker(
+                    location=[message[1], message[2]],
+                    popup=message[0],
+                    tooltip="Failsafe - short event",
+                    icon=folium.Icon(icon="exclamation-sign", color="pink")
+                ).add_to(base_map)
+
+    show_mission(wps, base_map)
+
+    print('\n{0}.html saved. Open in browser to show track'.format(filename))
+    base_map.save('{0}.html'.format(filename))
+
+
+def show_data_and_map(log, filename):
     max_altitude = 0
     max_distance = 0
     total_distance = 0
     last_bat_msg = None
     last_gps_msg = None
     first_gps_msg = None
+    longest_distance_gps = None
     points = []
     wps = []
+    messages = []
 
     while True:
-        msg = log.recv_match(type=['BAT', 'BARO', 'GPS', 'CMD'])
+        msg = log.recv_match(type=['GPS', 'MSG', 'MODE', 'BAT', 'BARO', 'CMD'], blocking=True)
         if msg is None:
             break
 
@@ -98,6 +151,13 @@ def show_plot_data(log, filename):
             points.append((msg.Lat, msg.Lng))
             if home.m > max_distance:
                 max_distance = home.m
+                longest_distance_gps = msg
+
+        if mtype == 'MSG':
+            messages.append([msg.Message, last_gps_msg.Lat, last_gps_msg.Lng])
+
+        if mtype == 'MODE':
+            messages.append(["Mode: {0}".format(msg.Mode), last_gps_msg.Lat, last_gps_msg.Lng])
 
         if mtype == 'BARO':
             alt = msg.Alt
@@ -114,30 +174,7 @@ def show_plot_data(log, filename):
     print('Maximum range: %.2f km' % (max_distance/1000))
     print('Average efficiency: %.2f mAh/km' % (last_bat_msg.CurrTot * 1000 / total_distance))
 
-    base_map = folium.Map([first_gps_msg.Lat, first_gps_msg.Lng], zoom_start=10)
-    folium.PolyLine(
-        points, color='darkorange'
-    ).add_to(base_map)
-
-    folium.Marker(
-        location=[first_gps_msg.Lat, first_gps_msg.Lng],
-        popup="Take off",
-        tooltip="Take off: [{0}, {1}]".format(first_gps_msg.Lat, first_gps_msg.Lng),
-        icon=folium.Icon(icon="chevron-up", color="green"),
-    ).add_to(base_map)
-
-    folium.Marker(
-        location=[last_gps_msg.Lat, last_gps_msg.Lng],
-        popup="Landing",
-        tooltip="Landing: [{0}, {1}]".format(last_gps_msg.Lat, last_gps_msg.Lng),
-        icon=folium.Icon(icon="chevron-down", color="darkgreen"),
-    ).add_to(base_map)
-
-    show_mission(wps, base_map)
-
-    print('\n{0}.html saved. Open in browser to show track'.format(filename))
-    base_map.save('{0}.html'.format(filename))
-
+    draw_map(filename, first_gps_msg, last_gps_msg, longest_distance_gps, points, wps, max_distance, messages)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='mavLogPlot')
@@ -154,4 +191,4 @@ if __name__ == '__main__':
 
         mlog.flightmode_list()
         print(f'\nLoading done. Please wait while processing.')
-        show_plot_data(mlog, args.logfile)
+        show_data_and_map(mlog, args.logfile)
