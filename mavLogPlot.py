@@ -12,6 +12,62 @@ def progress_bar(pct):
         print('.', end='')
 
 
+def show_messages(messages, map_output):
+    for message in messages:
+        folium.Marker(
+            location=[message[1], message[2]],
+            popup="Message: {0}".format(message[0]),
+            tooltip="Message",
+            icon=folium.Icon(icon="asterisk", color="orange")
+        ).add_to(map_output)
+
+
+def show_failsafe(messages, map_output):
+    for message in messages:
+        if message[0].startswith('Failsafe'):
+            if "Long event on" in message[0]:
+                folium.Marker(
+                    location=[message[1], message[2]],
+                    popup=message[0],
+                    tooltip="Failsafe - long event",
+                    icon=folium.Icon(icon="exclamation-sign", color="red")
+                ).add_to(map_output)
+            if "Short event on" in message[0]:
+                folium.Marker(
+                    location=[message[1], message[2]],
+                    popup=message[0],
+                    tooltip="Failsafe - short event",
+                    icon=folium.Icon(icon="exclamation-sign", color="pink")
+                ).add_to(map_output)
+
+
+def show_track(points, first_gps_msg, last_gps_msg, longest_distance_gps, max_distance, map_output):
+    folium.PolyLine(
+        points, color='darkorange'
+    ).add_to(map_output)
+
+    folium.Marker(
+        location=[first_gps_msg.Lat, first_gps_msg.Lng],
+        popup="Take off: [{0}, {1}]".format(first_gps_msg.Lat, first_gps_msg.Lng),
+        tooltip="Take off",
+        icon=folium.Icon(icon="circle-arrow-up", color="green")
+    ).add_to(map_output)
+
+    folium.Marker(
+        location=[last_gps_msg.Lat, last_gps_msg.Lng],
+        popup="Landing: [{0}, {1}]".format(last_gps_msg.Lat, last_gps_msg.Lng),
+        tooltip="Landing",
+        icon=folium.Icon(icon="circle-arrow-down", color="darkgreen")
+    ).add_to(map_output)
+
+    folium.Marker(
+        location=[longest_distance_gps.Lat, longest_distance_gps.Lng],
+        popup="The most remote point: [{0}, {1}], {2:.2f} km".format(longest_distance_gps.Lat, longest_distance_gps.Lng, max_distance/1000),
+        tooltip="The most remote point",
+        icon=folium.Icon(icon="asterisk", color="blue")
+    ).add_to(map_output)
+
+
 def show_mission(wps, map_output):
     if len(wps) > 0:
         first_location = None
@@ -64,51 +120,22 @@ def show_mission(wps, map_output):
 
 
 def draw_map(filename, first_gps_msg, last_gps_msg, longest_distance_gps, points, wps, max_distance, messages):
+    track_layer = folium.FeatureGroup(name='Track')
+    failsafe_layer = folium.FeatureGroup(name='Failsafe')
+    mission_layer = folium.FeatureGroup(name='Mission')
+    message_layer = folium.FeatureGroup(name='Messages', show=False)
+
     base_map = folium.Map([first_gps_msg.Lat, first_gps_msg.Lng], zoom_start=10)
-    folium.PolyLine(
-        points, color='darkorange'
-    ).add_to(base_map)
+    base_map.add_child(track_layer)
+    base_map.add_child(failsafe_layer)
+    base_map.add_child(mission_layer)
+    base_map.add_child(message_layer)
+    base_map.add_child(folium.map.LayerControl(collapsed=False))
 
-    folium.Marker(
-        location=[first_gps_msg.Lat, first_gps_msg.Lng],
-        popup="Take off: [{0}, {1}]".format(first_gps_msg.Lat, first_gps_msg.Lng),
-        tooltip="Take off",
-        icon=folium.Icon(icon="circle-arrow-up", color="green")
-    ).add_to(base_map)
-
-    folium.Marker(
-        location=[last_gps_msg.Lat, last_gps_msg.Lng],
-        popup="Landing: [{0}, {1}]".format(last_gps_msg.Lat, last_gps_msg.Lng),
-        tooltip="Landing",
-        icon=folium.Icon(icon="circle-arrow-down", color="darkgreen")
-    ).add_to(base_map)
-
-    folium.Marker(
-        location=[longest_distance_gps.Lat, longest_distance_gps.Lng],
-        popup="The most remote point: [{0}, {1}], {2:.2f} km".format(longest_distance_gps.Lat, longest_distance_gps.Lng, max_distance/1000),
-        tooltip="The most remote point",
-        icon=folium.Icon(icon="asterisk", color="blue")
-    ).add_to(base_map)
-
-
-    for message in messages:
-        if message[0].startswith('Failsafe'):
-            if "Long event on" in message[0]:
-                folium.Marker(
-                    location=[message[1], message[2]],
-                    popup=message[0],
-                    tooltip="Failsafe - long event",
-                    icon=folium.Icon(icon="exclamation-sign", color="red")
-                ).add_to(base_map)
-            if "Short event on" in message[0]:
-                folium.Marker(
-                    location=[message[1], message[2]],
-                    popup=message[0],
-                    tooltip="Failsafe - short event",
-                    icon=folium.Icon(icon="exclamation-sign", color="pink")
-                ).add_to(base_map)
-
-    show_mission(wps, base_map)
+    show_track(points, first_gps_msg, last_gps_msg, longest_distance_gps, max_distance, track_layer)
+    show_mission(wps, mission_layer)
+    show_messages(messages, message_layer)
+    show_failsafe(messages, failsafe_layer)
 
     print('\n{0}.html saved. Open in browser to show track'.format(filename))
     base_map.save('{0}.html'.format(filename))
