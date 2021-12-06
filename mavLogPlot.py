@@ -41,7 +41,7 @@ def show_failsafe(messages, map_output):
                 ).add_to(map_output)
 
 
-def show_track(points, first_gps_msg, last_gps_msg, longest_distance_gps, max_distance, map_output):
+def show_track(points, first_gps_msg, last_gps_msg, longest_distance_gps, max_distance, info_html, map_output):
     folium.PolyLine(
         points, color='darkorange'
     ).add_to(map_output)
@@ -53,16 +53,21 @@ def show_track(points, first_gps_msg, last_gps_msg, longest_distance_gps, max_di
         icon=folium.Icon(icon="circle-arrow-up", color="green")
     ).add_to(map_output)
 
+    iframe = folium.IFrame(html=info_html, width=400, height=200)
+    info_popup = folium.Popup(iframe)
+
     folium.Marker(
         location=[last_gps_msg.Lat, last_gps_msg.Lng],
-        popup="Landing: [{0}, {1}]".format(last_gps_msg.Lat, last_gps_msg.Lng),
+        # popup="Landing: [{0}, {1}]".format(last_gps_msg.Lat, last_gps_msg.Lng),
+        popup=info_popup,
         tooltip="Landing",
         icon=folium.Icon(icon="circle-arrow-down", color="darkgreen")
     ).add_to(map_output)
 
     folium.Marker(
         location=[longest_distance_gps.Lat, longest_distance_gps.Lng],
-        popup="The most remote point: [{0}, {1}], {2:.2f} km".format(longest_distance_gps.Lat, longest_distance_gps.Lng, max_distance/1000),
+        popup="The most remote point: [{0}, {1}], {2:.2f} km".format(
+            longest_distance_gps.Lat, longest_distance_gps.Lng, max_distance / 1000),
         tooltip="The most remote point",
         icon=folium.Icon(icon="asterisk", color="blue")
     ).add_to(map_output)
@@ -101,7 +106,8 @@ def show_mission(wps, map_output):
                     folium.Marker(
                         location=[wp[0], wp[1]],
                         tooltip="Waypoint #{0}".format(wp[2]),
-                        popup="Waypoint #{2}: [{0}, {1}], Alt={3} m, Type={4}".format(wp[0], wp[1], wp[2], wp[3], wp[4]),
+                        popup="Waypoint #{2}: [{0}, {1}], Alt={3} m, Type={4}"
+                                .format(wp[0], wp[1], wp[2], wp[3], wp[4]),
                         icon=folium.Icon(icon="plus", color="blue"),
                     ).add_to(map_output)
                 else:
@@ -119,10 +125,11 @@ def show_mission(wps, map_output):
         print('\nNo mission data is found')
 
 
-def draw_map(filename, first_gps_msg, last_gps_msg, longest_distance_gps, points, wps, max_distance, messages):
+def draw_map(filename, first_gps_msg, last_gps_msg, longest_distance_gps, points, wps, max_distance, messages,
+             info_html):
     track_layer = folium.FeatureGroup(name='Track')
-    failsafe_layer = folium.FeatureGroup(name='Failsafe')
-    mission_layer = folium.FeatureGroup(name='Mission')
+    failsafe_layer = folium.FeatureGroup(name='Failsafe', show=False)
+    mission_layer = folium.FeatureGroup(name='Mission', show=False)
     message_layer = folium.FeatureGroup(name='Messages', show=False)
 
     base_map = folium.Map([first_gps_msg.Lat, first_gps_msg.Lng], zoom_start=10)
@@ -132,7 +139,7 @@ def draw_map(filename, first_gps_msg, last_gps_msg, longest_distance_gps, points
     base_map.add_child(message_layer)
     base_map.add_child(folium.map.LayerControl(collapsed=False))
 
-    show_track(points, first_gps_msg, last_gps_msg, longest_distance_gps, max_distance, track_layer)
+    show_track(points, first_gps_msg, last_gps_msg, longest_distance_gps, max_distance, info_html, track_layer)
     show_mission(wps, mission_layer)
     show_messages(messages, message_layer)
     show_failsafe(messages, failsafe_layer)
@@ -192,16 +199,34 @@ def show_data_and_map(log, filename):
                 max_altitude = alt
 
     print('\nFlight statistics:')
-    print('Total time: %.2f sec' % (last_bat_msg.TimeUS/1000000))
+    print('Total time: %.2f sec' % (last_bat_msg.TimeUS / 1000000))
     print('Maximum altitude: %.2f m' % max_altitude)
     print('Used: %.2f mAh' % last_bat_msg.CurrTot)
     print(f'Home location: {first_gps_msg.Lat}, {first_gps_msg.Lng}')
     print(f'Last known location: {last_gps_msg.Lat}, {last_gps_msg.Lng}')
-    print('Total distance: %.2f km' % (total_distance/1000))
-    print('Maximum range: %.2f km' % (max_distance/1000))
+    print('Total distance: %.2f km' % (total_distance / 1000))
+    print('Maximum range: %.2f km' % (max_distance / 1000))
     print('Average efficiency: %.2f mAh/km' % (last_bat_msg.CurrTot * 1000 / total_distance))
 
-    draw_map(filename, first_gps_msg, last_gps_msg, longest_distance_gps, points, wps, max_distance, messages)
+    info_html = '<table>' \
+                '<tr><th col=2>Flight information</th></tr>' \
+                '<tr><td>Total time</td><td>{0:.2f} sec</td></tr>' \
+                '<tr><td>Max altitude</td><td>{1:.2f} m</td></tr>' \
+                '<tr><td>Battery used</td><td>{2:.2f} mAh</td></tr>' \
+                '<tr><td>Total distance</td><td>{3:.2f} km</td></tr>' \
+                '<tr><td>Maximum range</td><td>{4:.2f} km</td></tr>' \
+                '<tr><td>Average efficiency</td><td>{5:.2f} mAh/km</td></tr>' \
+                '</table>'.format((last_bat_msg.TimeUS / 1000000),
+                                  max_altitude,
+                                  last_bat_msg.CurrTot,
+                                  total_distance / 1000,
+                                  max_distance / 1000,
+                                  last_bat_msg.CurrTot * 1000 / total_distance
+                                  )
+
+    draw_map(filename, first_gps_msg, last_gps_msg, longest_distance_gps, points, wps, max_distance, messages,
+             info_html)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='mavLogPlot')
